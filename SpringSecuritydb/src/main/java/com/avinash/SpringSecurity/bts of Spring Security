@@ -1,0 +1,107 @@
+lets discuss how the Spring security creates the default login page
+before diving in let's understand some basic concepts
+
+1. Filters
+in context of web applications, Filters are reusable code, which the ability to transform the content of Http Request and Response
+Filters are part of Java Servlet API
+Filters intercept requests before they reach a servlet and responses before they leave the servlet.
+They do not themselves produce a response, but they can modify the request or response.
+Multiple filters can be configured in a web application, forming a filter chain.
+Each filter has the option to pass the request and response to the next entity in the chain or to block further processing.
+we will use the filters for the Authentication and Authorization
+
+
+Authentication and Authorization
+Now lets look at the process of Authentication and Authorization
+Default login page is provided by the "DefaultLoginPageGeneratingFilter" filter
+
+1 . DefaultLoginPageGeneratingFilter
+This filter checks if a custom login page is configured.
+If no custom login page is configured, it generates the default login form HTML.
+The form includes fields for the username and password, as well as a submit button.
+
+2. UsernamePasswordAuthenticationFilter:
+This filter intercepts the login requests (usually at the /login URL).
+It extracts the username and password from the request parameters.
+It then creates an Authentication object using the provided credentials.
+
+3. Authentication Manager:
+The Authentication object is passed to the AuthenticationManager (typically a ProviderManager).
+The AuthenticationManager delegates the authentication process to an AuthenticationProvider (such as DaoAuthenticationProvider)
+
+4. Authentication Provider:
+The AuthenticationProvider validates the credentials against a user store (e.g., an in-memory user store, a database, or an external authentication service).
+If the credentials are valid, an Authenticated Authentication object is returned, representing the authenticated user.
+
+5. Security Context:
+The authenticated Authentication object is stored in the SecurityContextHolder.
+The SecurityContextHolder holds the security context of the current user, making it accessible throughout the application.
+
+the above process runs for Authenticating an user
+
+//now lets look from server
+when ever a user logins through the login page, a Session object is created for the user which contains Session ID
+the Session ID will be stored at the server side and the Session Id will be sent to the client by the server via cookie
+the client accepts the cookie, from next request onwards the Session Id will be inserted in the header
+the server will extract the Session Id from the header and validates it
+if the session Id is correct, then the user is Authorized to access the resource
+this is Stateful manner, hence the server is storing the Session Id at server side
+if it is stateless, then we should use JWT based authorization
+in order to print the Session Id, we must use HttpServletRequest object and use getSession().getId() methods on request object
+
+//CSRF (Cross Site Request Forgery)
+lets consider a situation, where u have visited a bank site
+according to the rule, the bank website will generate a Session ID
+bank site is running in the background
+in the following time,you have visited a malicious site
+the malicious site tries to access ur website cookies and takes the Session ID of Bank Site and makes transaction instead of you
+this process is known as Cross Site Request Forgery
+to avoid this we will use CSRF token
+CSRF token are generated for the requests which changes the database like POST,PUT,DELETE etc
+when ever a Post request is sent from the client, Server generates a from and it generates a CSRF token
+the CSRF token will be saved on server side and injected into the form and the form will be sent to the client
+whenever client fills the form and submits the form, the clients sends the CSRF token through header
+then the server will validate the CSRF token
+to avoid the other sites to access your session ID we will do that in the application properties file by defining the below
+server.servlet.session.cookie.name = strict
+the above command will avoid third party sites to access your Session ID
+all the info is saved on server side
+hence it is Stateful Authentication
+
+//to get csrf token we will use the following code
+// request.getAttribute("_csrf");
+
+//setting default username and Password
+by default for spring security the username will be user and password will be auto generated during runtime
+//to avoid this we will fix our password and username in application properties file
+but because of thet, all the clients who uses our application will have same username and password
+so in order to avoid this we will generate our chustom username and password in configuration
+
+//@Bean
+We will use @Bean Annotation in Configuration file above methods
+it indicates that, the methods return some classes
+and it is the responsibility of Spring to create the objects of the Classes
+that's why we will use @Bean Annotation
+
+//steps to connect the database
+The AuthenticationProvider interface in Spring Security plays a crucial role in the authentication process.
+ It is responsible for authenticating users based on the credentials provided during the login attempt.
+ So first of all we must define a method which return the AuthenticationProvider
+ there are so many AuthenticationProviders
+ for dealing with database and backend we will use "DaoAuthenticationProvider"
+ each AuthenticationProvider will have its own purpose
+ in that method we must define the set the UserServiceDetails() and we must encrypt the password
+ lets configure this
+
+ //password Encryption
+ they are two ways to protect password 1. Hashing 2. Encryption
+ In hashing the password is hashed number of times, that hashed password will be saved in the database
+ we cant make the hashed password into normal text
+ so we will hash the input password from client and the compare with the hashed password stored in database
+ Password encryption and decryption are techniques used to secure sensitive information, such as passwords, by transforming it into an unreadable format (encryption) and then converting it back to its original form (decryption) when needed.
+ we will use Bcrypt algorithm to encrypt and decrypt the passwords
+ first we need to take input from client and then we must encrypt and save the encrypted password
+ in return we must assign the decrypted password to the UserServiceDetails object in AuthenticationProvider
+ lets do that
+ we must encrypt the password, in service class
+ and we must decrypt at the AuthenticationProvider method
